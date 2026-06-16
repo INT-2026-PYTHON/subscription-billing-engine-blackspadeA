@@ -35,8 +35,22 @@ class TieredPricing(PricingStrategy):
 
     def __init__(self, tiers: list[Tier]) -> None:
         # TODO Day 1
-        raise NotImplementedError("Day 1: implement TieredPricing.__init__")
+      self.tiers = sorted(tiers, key=lambda t: t.from_units)
 
     def calculate(self, quantity: int) -> Money:
         # TODO Day 1
-        raise NotImplementedError("Day 1: implement TieredPricing.calculate")
+               total = 0
+        currency = self.tiers[0].unit_price.currency  # assume consistent currency
+
+        for tier in self.tiers:
+            
+            tier_to = tier.to_units if tier.to_units is not None else quantity
+
+            units_in_tier = max(0, min(quantity, tier_to) - tier.from_units)
+
+            total += units_in_tier * tier.unit_price.amount
+            
+            if quantity <= tier_to:
+                break
+
+        return Money(total, currency)
