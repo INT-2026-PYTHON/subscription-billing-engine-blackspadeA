@@ -14,11 +14,25 @@ class VATCalculator(TaxCalculator):
         #   - Validate 0 <= rate <= 1.
         #   - Reject float.
         #   - Store on self.
-        raise NotImplementedError("Day 1: implement VATCalculator.__init__")
+         if not isinstance(rate, Decimal):
+            raise TypeError("VAT rate must be a Decimal, not float")
+
+        if rate < Decimal("0") or rate > Decimal("1"):
+            raise ValueError("VAT rate must be between 0 and 1")
+
+        self.rate = rate
 
     def apply(self, taxable: Money, context: TaxContext) -> TaxBreakdown:
         # TODO Day 1
         #   - vat = taxable * self.rate
         #   - Return TaxBreakdown with one component (f"VAT {percent}%", vat) and total = vat.
         #   - Tip: format the rate as a percentage cleanly.
-        raise NotImplementedError("Day 1: implement VATCalculator.apply")
+        vat_amount = taxable.amount * self.rate
+        currency = taxable.currency
+
+        percent_str = f"{(self.rate * 100):.0f}%"
+
+        components = [(f"VAT {percent_str}", Money(vat_amount, currency))]
+        total = Money(vat_amount, currency)
+
+        return TaxBreakdown(components=components, total=total)
