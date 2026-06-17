@@ -268,12 +268,52 @@ class PaymentAttemptRepository:
         next_retry_at: Optional[datetime],
     ) -> int:
         # TODO Day 3.
-        raise NotImplementedError("Day 3: implement PaymentAttemptRepository.add")
-
+        """Insert a payment attempt and return its new id."""
+        cur = self.db.conn.cursor()
+        cur.execute(
+            """INSERT INTO payment_attempts
+               (invoice_id, attempt_no, status, failure_reason, next_retry_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                invoice_id,
+                attempt_no,
+                status,
+                failure_reason,
+                next_retry_at.isoformat() if next_retry_at else None,
+            ),
+        )
+        return cur.lastrowid
+       
     def list_for_invoice(self, invoice_id: int) -> list[dict]:
         # TODO Day 3.
-        raise NotImplementedError("Day 3: implement PaymentAttemptRepository.list_for_invoice")
-
+        """Return all payment attempts for a given invoice as dicts."""
+        cur = self.db.conn.cursor()
+        cur.execute(
+            """SELECT id, invoice_id, attempt_no, status, failure_reason, next_retry_at
+               FROM payment_attempts
+               WHERE invoice_id = ?
+               ORDER BY attempt_no""",
+            (invoice_id,),
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "id": r[0],
+                "invoice_id": r[1],
+                "attempt_no": r[2],
+                "status": r[3],
+                "failure_reason": r[4],
+                "next_retry_at": r[5],
+            }
+            for r in rows
+        ]
+       
     def count_for_invoice(self, invoice_id: int) -> int:
         # TODO Day 3.
-        raise NotImplementedError("Day 3: implement PaymentAttemptRepository.count_for_invoice")
+       """Return the number of payment attempts for a given invoice."""
+        cur = self.db.conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM payment_attempts WHERE invoice_id = ?",
+            (invoice_id,),
+        )
+        return cur.fetchone()[0]
