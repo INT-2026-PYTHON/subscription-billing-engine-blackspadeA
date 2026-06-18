@@ -148,4 +148,75 @@ class BillingCycle:
     def upgrade_subscription(self, subscription_id: int, new_plan_id: int, switch_date: date) -> None:
         """Mid-cycle upgrade — Day 4 stretch."""
         # TODO Day 4
-        raise NotImplementedError("Day 4: implement BillingCycle.upgrade_subscription")
+
+    Steps:
+      1. Fetch the subscription and current plan.
+      2. End the current billing period at `switch_date`.
+      3. Generate a pro‑rated invoice for usage up to `switch_date`.
+      4. Switch the subscription to the new plan.
+      5. Advance the subscription period to start at `switch_date`.
+    """
+    sub = self.subscription_repo.get(subscription_id)
+    if not sub:
+        raise ValueError(f"Subscription {subscription_id} not found")
+
+    old_plan = self.plan_repo.get(sub.plan_id)
+    new_plan = self.plan_repo.get(new_plan_id)
+    customer = self.customer_repo.get(sub.customer_id)
+
+    # Strategy, discount, tax
+    strategy = self.strategy_factory(old_plan)
+    discount = self.discount_factory(getattr(sub, "discount_id", None))
+    tax_calc, tax_ctx = self.tax_factory(customer)
+
+    # Usage up to switch_date
+    usage_quantity = self.usage_repo.sum_for_period(
+        sub.id,
+        metric="api_calls",  # or whatever metric applies
+        period_start=sub.current_period_start,
+        period_end=switch_date,
+    )
+
+    # Build pro‑rated invoice
+    invoice_count = self.invoice_repo.count_for_subscription(sub.id)
+    invoice = build_invoice(
+        subscription=sub,
+        plan=old_plan,
+        strategy=strategy,
+        discount=discount,
+        tax_calc=tax_calc,
+        tax_context=tax_ctx,
+        usage_quantity=usage_quantity,
+        period_start=sub.current_period_start,
+        period_end=switch_date,
+        invoice_count_so_far=invoice_count,
+    )
+
+    # Persist invoice (skip if duplicate)
+    try:
+        invoice = self.invoice_repo.add(invoice)
+        for li in invoice.line_items:
+            li.invoice_id = invoice.id
+            self.line_item_repo.add(li)
+        self.ledger_repo.add(
+            LedgerEntry(
+                id=None,
+                customer_id=sub.customer_id,
+                invoice_id=invoice.id,
+                direction=LedgerDirection.DEBIT,
+                amount=invoice.total,
+                occurred_at=switch_date,
+                description=f"Upgrade invoice for subscription {sub.id}",
+            )
+        )
+    except sqlite3.IntegrityError:
+        # Already invoiced for this period
+        pass
+
+    # Switch plan and advance subscription
+    self.subscription_repo.update_plan(subscription_id, new_plan_id)
+    self.subscription_repo.update_period(
+        subscription_id,
+        new_start=switch_date,
+        new_end=switch_date + new_plan.billing_period.delta(),
+    )
